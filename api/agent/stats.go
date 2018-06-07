@@ -111,12 +111,13 @@ func RegisterDockerViews(tagKeys []string) {
 	for _, m := range dockerMeasures {
 		dockerViews = append(dockerViews, createView(m, view.Distribution(), tagKeys))
 	}
-	if err = view.Register(dockerViews...); err != nil {
+	if err := view.Register(dockerViews...); err != nil {
 		logrus.WithError(err).Fatal("cannot register view")
 	}
+}
 
-	// RegisterContainerViews creates and register containers views with provided tag keys
-func RegisterContainerViews(tagKeys []string) { 
+// RegisterContainerViews creates and register containers views with provided tag keys
+func RegisterContainerViews(tagKeys []string) {
 	// Create views for container measures
 	containerGaugeViews := make([]*view.View, len(containerGaugeKeys))
 	for i, key := range containerGaugeKeys {
@@ -125,7 +126,7 @@ func RegisterContainerViews(tagKeys []string) {
 		}
 		containerGaugeViews = append(containerGaugeViews, createView(containerGaugeMeasures[i], view.Count(), tagKeys))
 	}
-	if err = view.Register(containerGaugeViews...); err != nil {
+	if err := view.Register(containerGaugeViews...); err != nil {
 		logrus.WithError(err).Fatal("cannot register view")
 	}
 
@@ -136,7 +137,7 @@ func RegisterContainerViews(tagKeys []string) {
 		}
 		containerTimeViews = append(containerTimeViews, createView(containerTimeMeasures[i], view.Distribution(), tagKeys))
 	}
-	if err = view.Register(containerTimeViews...); err != nil {
+	if err := view.Register(containerTimeViews...); err != nil {
 		logrus.WithError(err).Fatal("cannot register view")
 	}
 }
