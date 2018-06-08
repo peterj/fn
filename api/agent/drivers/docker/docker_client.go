@@ -142,12 +142,12 @@ func createView(measure stats.Measure, agg *view.Aggregation, tagKeys []string) 
 
 func makeKeys(names []string) []tag.Key {
 	tagKeys := make([]tag.Key, len(names))
-	for _, name := range names {
+	for i, name := range names {
 		key, err := tag.NewKey(name)
 		if err != nil {
 			logrus.Fatal(err)
 		}
-		tagKeys = append(tagKeys, key)
+		tagKeys[i] = key
 	}
 	return tagKeys
 }

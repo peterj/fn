@@ -78,15 +78,10 @@ var (
 	timedoutMeasure        = makeMeasure(timedoutMetricName, "calls timed out in agent", "")
 	errorsMeasure          = makeMeasure(errorsMetricName, "calls errored in agent", "")
 	serverBusyMeasure      = makeMeasure(serverBusyMetricName, "calls where server was too busy in agent", "")
-	containerGaugeMeasures []*stats.Int64Measure
-	containerTimeMeasures  []*stats.Int64Measure
-	dockerMeasures         map[string]*stats.Int64Measure
+	dockerMeasures         = initDockerMeasures()
+	containerGaugeMeasures = initContainerGaugeMeasures()
+	containerTimeMeasures  = initContainerTimeMeasures()
 )
-
-func init() {
-	initDockerStats()
-	initContainerStats()
-}
 
 // RegisterAgentViews creates and registers all agent views
 func RegisterAgentViews(tagKeys []string) {
@@ -107,75 +102,77 @@ func RegisterAgentViews(tagKeys []string) {
 
 // RegisterDockerViews creates a and registers Docker views with provided tag keys
 func RegisterDockerViews(tagKeys []string) {
-	dockerViews := make([]*view.View, len(dockerMeasures))
 	for _, m := range dockerMeasures {
-		dockerViews = append(dockerViews, createView(m, view.Distribution(), tagKeys))
-	}
-	if err := view.Register(dockerViews...); err != nil {
-		logrus.WithError(err).Fatal("cannot register view")
+		v := createView(m, view.Distribution(), tagKeys)
+		if err := view.Register(v); err != nil {
+			logrus.WithError(err).Fatal("cannot register view")
+		}
 	}
 }
 
 // RegisterContainerViews creates and register containers views with provided tag keys
 func RegisterContainerViews(tagKeys []string) {
 	// Create views for container measures
-	containerGaugeViews := make([]*view.View, len(containerGaugeKeys))
 	for i, key := range containerGaugeKeys {
-		if key == "" { // leave nil intentionally, let it panic
+		if key == "" {
 			continue
 		}
-		containerGaugeViews = append(containerGaugeViews, createView(containerGaugeMeasures[i], view.Count(), tagKeys))
-	}
-	if err := view.Register(containerGaugeViews...); err != nil {
-		logrus.WithError(err).Fatal("cannot register view")
+		v := createView(containerGaugeMeasures[i], view.Count(), tagKeys)
+		if err := view.Register(v); err != nil {
+			logrus.WithError(err).Fatal("cannot register view")
+		}
 	}
 
-	containerTimeViews := make([]*view.View, len(containerTimeKeys))
 	for i, key := range containerTimeKeys {
 		if key == "" {
 			continue
 		}
-		containerTimeViews = append(containerTimeViews, createView(containerTimeMeasures[i], view.Distribution(), tagKeys))
-	}
-	if err := view.Register(containerTimeViews...); err != nil {
-		logrus.WithError(err).Fatal("cannot register view")
+		v := createView(containerTimeMeasures[i], view.Distribution(), tagKeys)
+		if err := view.Register(v); err != nil {
+			logrus.WithError(err).Fatal("cannot register view")
+		}
 	}
 }
 
-// initDockerStats initializes Docker related measures and views
-func initDockerStats() {
+// initDockerMeasures initializes Docker related measures
+func initDockerMeasures() map[string]*stats.Int64Measure {
 	// TODO this is nasty figure out how to use opencensus to not have to declare these
 	keys := []string{"net_rx", "net_tx", "mem_limit", "mem_usage", "disk_read", "disk_write", "cpu_user", "cpu_total", "cpu_kernel"}
-	dockerMeasures := make(map[string]*stats.Int64Measure, len(keys))
+	measures := make(map[string]*stats.Int64Measure, len(keys))
 	for _, key := range keys {
 		units := "bytes"
 		if strings.Contains(key, "cpu") {
 			units = "cpu"
 		}
-		dockerMeasures[key] = makeMeasure("docker_stats_"+key, "docker container stats for "+key, units)
+		measures[key] = makeMeasure("docker_stats_"+key, "docker container stats for "+key, units)
 	}
+	return measures
 }
 
-// initContainerStats initializes container related measures and views
-func initContainerStats() {
-	// TODO(reed): do we have to do this? the measurements will be tagged on the context, will they be propagated
-	// or we have to white list them in the view for them to show up? test...
-
-	containerGaugeMeasures = make([]*stats.Int64Measure, len(containerGaugeKeys))
+func initContainerGaugeMeasures() []*stats.Int64Measure {
+	gaugeMeasures := make([]*stats.Int64Measure, len(containerGaugeKeys))
 	for i, key := range containerGaugeKeys {
 		if key == "" { // leave nil intentionally, let it panic
 			continue
 		}
-		containerGaugeMeasures[i] = makeMeasure(key, "containers in state "+key, "")
+		gaugeMeasures[i] = makeMeasure(key, "containers in state "+key, "")
 	}
+	return gaugeMeasures
+}
 
-	containerTimeMeasures := make([]*stats.Int64Measure, len(containerTimeKeys))
+func initContainerTimeMeasures() []*stats.Int64Measure {
+	// TODO(reed): do we have to do this? the measurements will be tagged on the context, will they be propagated
+	// or we have to white list them in the view for them to show up? test...
+
+	timeMeasures := make([]*stats.Int64Measure, len(containerTimeKeys))
 	for i, key := range containerTimeKeys {
 		if key == "" {
 			continue
 		}
-		containerTimeMeasures[i] = makeMeasure(key, "time spent in container state "+key, "ms")
+		timeMeasures[i] = makeMeasure(key, "time spent in container state "+key, "ms")
 	}
+
+	return timeMeasures
 }
 
 func createView(measure stats.Measure, agg *view.Aggregation, tagKeys []string) *view.View {
@@ -194,12 +191,12 @@ func makeMeasure(name string, desc string, unit string) *stats.Int64Measure {
 
 func makeKeys(names []string) []tag.Key {
 	tagKeys := make([]tag.Key, len(names))
-	for _, name := range names {
+	for i, name := range names {
 		key, err := tag.NewKey(name)
 		if err != nil {
 			logrus.Fatal(err)
 		}
-		tagKeys = append(tagKeys, key)
+		tagKeys[i] = key
 	}
 	return tagKeys
 }
